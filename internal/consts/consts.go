@@ -67,3 +67,14 @@ const (
 	// all other attempts to dynamically decide the default image fail.
 	DefaultControlPlaneImage = DefaultControlPlaneBaseImage + ":" + DefaultControlPlaneTag
 )
+
+// -----------------------------------------------------------------------------
+// Consts - DataPlane exposed ports
+// -----------------------------------------------------------------------------
+
+const (
+	DataPlaneAdminAPIPort = 8444
+	DataPlaneProxyPort    = 8000
+	DataPlaneProxySSLPort = 8443
+	DataPlaneMetricsPort  = 8100
+)

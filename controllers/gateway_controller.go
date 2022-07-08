@@ -213,6 +213,12 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true, RequeueAfter: requeueWithoutBackoff}, nil
 	}
 
+	// ensure the network policy for the dataplane is created
+	debug(log, "ensuring dataplane network policy is in place", gateway)
+	if err := r.ensureDataPlaneNetworkPolicy(ctx, gateway, dataplane, controlplane); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	debug(log, "marking the gateway as ready", gateway)
 	if err := r.ensureGatewayMarkedReady(ctx, gateway, dataplane); err != nil {
 		return ctrl.Result{}, err

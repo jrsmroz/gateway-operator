@@ -6,17 +6,21 @@ import (
 	"fmt"
 	"net/http"
 
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-
 	operatorv1alpha1 "github.com/kong/gateway-operator/apis/v1alpha1"
 	"github.com/kong/gateway-operator/internal/consts"
 	operatorerrors "github.com/kong/gateway-operator/internal/errors"
 	gatewayutils "github.com/kong/gateway-operator/internal/utils/gateway"
 	k8sutils "github.com/kong/gateway-operator/internal/utils/kubernetes"
 	"github.com/kong/gateway-operator/pkg/vars"
+
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
 
 // -----------------------------------------------------------------------------
@@ -190,4 +194,91 @@ func (r *GatewayReconciler) getGatewayConfigForGatewayClass(ctx context.Context,
 		Namespace: string(*gatewayClass.Spec.ParametersRef.Namespace),
 		Name:      gatewayClass.Spec.ParametersRef.Name,
 	}, gatewayConfig)
+}
+
+func (r *GatewayReconciler) ensureDataPlaneNetworkPolicy(
+	ctx context.Context,
+	gateway *gatewayv1alpha2.Gateway,
+	dataplane *operatorv1alpha1.DataPlane,
+	controlplane *operatorv1alpha1.ControlPlane,
+) error {
+	policy := new(networkingv1.NetworkPolicy)
+	policyNSN := types.NamespacedName{Namespace: gateway.Namespace, Name: fmt.Sprintf("np-dataplane-%s", gateway.Name)}
+
+	if err := r.Client.Get(ctx, policyNSN, policy); err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return err
+		}
+
+		policy = generateDataPlaneNetworkPolicy(policyNSN, dataplane, controlplane)
+		k8sutils.SetOwnerForObject(gateway, policy)
+
+		return r.Client.Create(ctx, policy)
+	}
+
+	// TODO: Should we allow user modifications to the dataplane network policy?
+	// Or should we just enforce that the dataplane network policy is generated?
+
+	return nil
+}
+
+func generateDataPlaneNetworkPolicy(
+	policyNSN types.NamespacedName,
+	dataplane *operatorv1alpha1.DataPlane,
+	controlplane *operatorv1alpha1.ControlPlane,
+) *networkingv1.NetworkPolicy {
+	var (
+		protocolTCP  = corev1.ProtocolTCP
+		adminAPIPort = intstr.FromInt(consts.DataPlaneAdminAPIPort)
+		proxyPort    = intstr.FromInt(consts.DataPlaneProxyPort)
+		proxySSLPort = intstr.FromInt(consts.DataPlaneProxySSLPort)
+		metricsPort  = intstr.FromInt(consts.DataPlaneMetricsPort)
+	)
+
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      policyNSN.Name,
+			Namespace: policyNSN.Namespace,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+
+				MatchLabels: map[string]string{
+					"app": dataplane.Name,
+				},
+			},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				// Only allow controlplane pods to communicate with the admin API
+				{
+					Ports: []networkingv1.NetworkPolicyPort{
+						{Protocol: &protocolTCP, Port: &adminAPIPort},
+					},
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"app": controlplane.Name,
+								},
+							},
+							// NamespaceDefaultLabelName feature gate must be enabled for this to work
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"kubernetes.io/metadata.name": dataplane.Namespace,
+								},
+							},
+						},
+					},
+				},
+				// Allow traffic to other dataplane deployment ports
+				{
+					Ports: []networkingv1.NetworkPolicyPort{
+						{Protocol: &protocolTCP, Port: &proxyPort},
+						{Protocol: &protocolTCP, Port: &proxySSLPort},
+						{Protocol: &protocolTCP, Port: &metricsPort},
+					},
+				},
+			},
+		},
+	}
 }
