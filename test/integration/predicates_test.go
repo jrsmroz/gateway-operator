@@ -10,9 +10,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	operatorv1alpha1 "github.com/kong/gateway-operator/apis/v1alpha1"
 	"github.com/kong/gateway-operator/controllers"
+	gatewayutils "github.com/kong/gateway-operator/internal/utils/gateway"
 )
 
 // controlPlanePredicate is a helper function for tests that returns a function
@@ -141,6 +143,66 @@ func dataPlaneHasActiveService(t *testing.T, dataplaneName types.NamespacedName,
 		}
 		return false
 	})
+}
+
+func gatewayIsScheduled(t *testing.T, gatewayNSN types.NamespacedName) func() bool {
+	client := gatewayClient.GatewayV1alpha2().Gateways(gatewayNSN.Namespace)
+	return func() bool {
+		gateway, err := client.Get(ctx, gatewayNSN.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		return gatewayutils.IsGatewayScheduled(gateway)
+	}
+}
+
+func gatewayIsReady(t *testing.T, gatewayNSN types.NamespacedName) func() bool {
+	client := gatewayClient.GatewayV1alpha2().Gateways(gatewayNSN.Namespace)
+	return func() bool {
+		gateway, err := client.Get(ctx, gatewayNSN.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		return gatewayutils.IsGatewayReady(gateway)
+	}
+}
+
+func gatewayDataPlanesIsProvisioned(t *testing.T, gateway *v1alpha2.Gateway) func() bool {
+	return func() bool {
+		dataplanes := mustListDataPlanesForGateway(t, gateway)
+
+		if len(dataplanes) == 1 {
+			for _, condition := range dataplanes[0].Status.Conditions {
+				if condition.Type == string(controllers.DataPlaneConditionTypeProvisioned) &&
+					condition.Status == metav1.ConditionTrue {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+func gatewayControlPlanesIsProvisioned(t *testing.T, gateway *v1alpha2.Gateway) func() bool {
+	return func() bool {
+		controlplanes := mustListControlPlanesForGateway(t, gateway)
+
+		if len(controlplanes) == 1 {
+			for _, condition := range controlplanes[0].Status.Conditions {
+				if condition.Type == string(controllers.ControlPlaneConditionTypeProvisioned) &&
+					condition.Status == metav1.ConditionTrue {
+					return true
+				}
+			}
+		}
+		return false
+	}
+}
+
+func gatewayNetworkPoliciesExist(t *testing.T, gateway *v1alpha2.Gateway) func() bool {
+	return func() bool {
+		networkpolicies, err := gatewayutils.ListNetworkPoliciesForGateway(ctx, mgrClient, gateway)
+		if err != nil {
+			return false
+		}
+		return len(networkpolicies) > 0
+	}
 }
 
 // Not is a helper function for tests that returns a negation of a predicate.

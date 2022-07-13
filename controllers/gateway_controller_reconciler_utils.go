@@ -202,16 +202,17 @@ func (r *GatewayReconciler) ensureDataPlaneNetworkPolicy(
 	dataplane *operatorv1alpha1.DataPlane,
 	controlplane *operatorv1alpha1.ControlPlane,
 ) error {
-	policy := new(networkingv1.NetworkPolicy)
-	policyNSN := types.NamespacedName{Namespace: gateway.Namespace, Name: fmt.Sprintf("np-dataplane-%s", gateway.Name)}
-
-	if err := r.Client.Get(ctx, policyNSN, policy); err != nil {
+	networkPolicies, err := gatewayutils.ListNetworkPoliciesForGateway(ctx, r.Client, gateway)
+	if err != nil {
 		if !k8serrors.IsNotFound(err) {
 			return err
 		}
+	}
 
-		policy = generateDataPlaneNetworkPolicy(policyNSN, dataplane, controlplane)
-		k8sutils.SetOwnerForObject(gateway, policy)
+	if len(networkPolicies) == 0 {
+		policy := generateDataPlaneNetworkPolicy(gateway.Namespace, dataplane, controlplane)
+		k8sutils.SetOwnerForObject(policy, gateway)
+		gatewayutils.LabelObjectAsGatewayManaged(policy)
 
 		return r.Client.Create(ctx, policy)
 	}
@@ -223,7 +224,7 @@ func (r *GatewayReconciler) ensureDataPlaneNetworkPolicy(
 }
 
 func generateDataPlaneNetworkPolicy(
-	policyNSN types.NamespacedName,
+	namespace string,
 	dataplane *operatorv1alpha1.DataPlane,
 	controlplane *operatorv1alpha1.ControlPlane,
 ) *networkingv1.NetworkPolicy {
@@ -237,8 +238,8 @@ func generateDataPlaneNetworkPolicy(
 
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      policyNSN.Name,
-			Namespace: policyNSN.Namespace,
+			Namespace:    namespace,
+			GenerateName: fmt.Sprintf("%s-np-", dataplane.Name),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
