@@ -102,14 +102,7 @@ func TestGatewayEssentials(t *testing.T) {
 
 	t.Log("verifying connectivity to the Gateway")
 	require.Eventually(t, func() bool {
-		resp, err := httpc.Get("http://" + gatewayIP)
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		return strings.Contains(string(body), defaultKongResponseBody)
+		return newFunction(t, "http://"+gatewayIP, defaultKongResponseBody)
 	}, subresourceReadinessWait, time.Second)
 
 	t.Log("deleting Gateway resource")
@@ -129,4 +122,18 @@ func TestGatewayEssentials(t *testing.T) {
 
 	t.Log("verifying networkpolicies are deleted")
 	require.Eventually(t, Not(gatewayNetworkPoliciesExist(t, gateway)), time.Minute, time.Second)
+}
+
+func newFunction(t *testing.T, url string, expectedResponseBody string) bool {
+	resp, err := httpc.Get(url)
+	if err != nil {
+		return false
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	return strings.Contains(string(body), expectedResponseBody)
 }
