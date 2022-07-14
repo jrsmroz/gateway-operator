@@ -97,6 +97,9 @@ func TestGatewayEssentials(t *testing.T) {
 	require.Eventually(t, gatewayControlPlanesIsProvisioned(t, gateway), subresourceReadinessWait, time.Second)
 	controlplane := mustListControlPlanesForGateway(t, gateway)[0]
 
+	t.Log("verifying networkpolicies are created")
+	require.Eventually(t, gatewayNetworkPoliciesExist(t, gateway), subresourceReadinessWait, time.Second)
+
 	t.Log("verifying connectivity to the Gateway")
 	require.Eventually(t, func() bool {
 		resp, err := httpc.Get("http://" + gatewayIP)
@@ -123,56 +126,6 @@ func TestGatewayEssentials(t *testing.T) {
 		_, err := operatorClient.ApisV1alpha1().ControlPlanes(namespace.Name).Get(ctx, controlplane.Name, metav1.GetOptions{})
 		return errors.IsNotFound(err)
 	}, time.Minute, time.Second)
-}
-
-func TestGatewayDataPlaneNetworkPolicy(t *testing.T) {
-	namespace, cleaner := setup(t)
-	defer func() { assert.NoError(t, cleaner.Cleanup(ctx)) }()
-
-	t.Log("deploying a GatewayClass resource")
-	gatewayClass := &gatewayv1alpha2.GatewayClass{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: uuid.NewString(),
-		},
-		Spec: gatewayv1alpha2.GatewayClassSpec{
-			ControllerName: gatewayv1alpha2.GatewayController(vars.ControllerName),
-		},
-	}
-	gatewayClass, err := gatewayClient.GatewayV1alpha2().GatewayClasses().Create(ctx, gatewayClass, metav1.CreateOptions{})
-	require.NoError(t, err)
-	cleaner.Add(gatewayClass)
-
-	t.Log("deploying Gateway resource")
-	gatewayNSN := types.NamespacedName{
-		Name:      uuid.NewString(),
-		Namespace: namespace.Name,
-	}
-	gateway := &gatewayv1alpha2.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: gatewayNSN.Namespace,
-			Name:      gatewayNSN.Name,
-		},
-		Spec: gatewayv1alpha2.GatewaySpec{
-			GatewayClassName: gatewayv1alpha2.ObjectName(gatewayClass.Name),
-			Listeners: []gatewayv1alpha2.Listener{{
-				Name:     "http",
-				Protocol: gatewayv1alpha2.HTTPProtocolType,
-				Port:     gatewayv1alpha2.PortNumber(80),
-			}},
-		},
-	}
-	gateway, err = gatewayClient.GatewayV1alpha2().Gateways(namespace.Name).Create(ctx, gateway, metav1.CreateOptions{})
-	require.NoError(t, err)
-	cleaner.Add(gateway)
-
-	t.Log("verifying Gateway gets marked as Ready")
-	require.Eventually(t, gatewayIsReady(t, gatewayNSN), gatewayReadyTimeLimit, time.Second)
-
-	t.Log("verifying networkpolicies are created")
-	require.Eventually(t, gatewayNetworkPoliciesExist(t, gateway), subresourceReadinessWait, time.Second)
-
-	t.Log("deleting Gateway resource")
-	require.NoError(t, gatewayClient.GatewayV1alpha2().Gateways(namespace.Name).Delete(ctx, gateway.Name, metav1.DeleteOptions{}))
 
 	t.Log("verifying networkpolicies are deleted")
 	require.Eventually(t, Not(gatewayNetworkPoliciesExist(t, gateway)), time.Minute, time.Second)

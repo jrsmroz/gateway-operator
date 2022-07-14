@@ -236,6 +236,38 @@ func generateDataPlaneNetworkPolicy(
 		metricsPort  = intstr.FromInt(consts.DataPlaneMetricsPort)
 	)
 
+	limitAdminAPIIngress := networkingv1.NetworkPolicyIngressRule{
+		Ports: []networkingv1.NetworkPolicyPort{
+			{Protocol: &protocolTCP, Port: &adminAPIPort},
+		},
+		From: []networkingv1.NetworkPolicyPeer{{
+			PodSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": controlplane.Name,
+				},
+			},
+			// NamespaceDefaultLabelName feature gate must be enabled for this to work
+			NamespaceSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"kubernetes.io/metadata.name": dataplane.Namespace,
+				},
+			},
+		}},
+	}
+
+	allowProxyIngress := networkingv1.NetworkPolicyIngressRule{
+		Ports: []networkingv1.NetworkPolicyPort{
+			{Protocol: &protocolTCP, Port: &proxyPort},
+			{Protocol: &protocolTCP, Port: &proxySSLPort},
+		},
+	}
+
+	allowMetricsIngress := networkingv1.NetworkPolicyIngressRule{
+		Ports: []networkingv1.NetworkPolicyPort{
+			{Protocol: &protocolTCP, Port: &metricsPort},
+		},
+	}
+
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    namespace,
@@ -243,42 +275,17 @@ func generateDataPlaneNetworkPolicy(
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
-
 				MatchLabels: map[string]string{
 					"app": dataplane.Name,
 				},
 			},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
+			},
 			Ingress: []networkingv1.NetworkPolicyIngressRule{
-				// Only allow controlplane pods to communicate with the admin API
-				{
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Protocol: &protocolTCP, Port: &adminAPIPort},
-					},
-					From: []networkingv1.NetworkPolicyPeer{
-						{
-							PodSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"app": controlplane.Name,
-								},
-							},
-							// NamespaceDefaultLabelName feature gate must be enabled for this to work
-							NamespaceSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"kubernetes.io/metadata.name": dataplane.Namespace,
-								},
-							},
-						},
-					},
-				},
-				// Allow traffic to other dataplane deployment ports
-				{
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Protocol: &protocolTCP, Port: &proxyPort},
-						{Protocol: &protocolTCP, Port: &proxySSLPort},
-						{Protocol: &protocolTCP, Port: &metricsPort},
-					},
-				},
+				limitAdminAPIIngress,
+				allowProxyIngress,
+				allowMetricsIngress,
 			},
 		},
 	}
