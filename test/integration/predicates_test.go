@@ -4,6 +4,8 @@
 package integration
 
 import (
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	operatorv1alpha1 "github.com/kong/gateway-operator/apis/v1alpha1"
 	"github.com/kong/gateway-operator/controllers"
@@ -195,6 +198,12 @@ func gatewayControlPlanesIsProvisioned(t *testing.T, gateway *v1alpha2.Gateway) 
 	}
 }
 
+// gatewayNetworkPoliciesExist is a helper function for tests that returns a function
+// that can be used to check if a Gateway owns a networkpolicy.
+// Should be used in conjunction with require.Eventually or assert.Eventually.
+// Gateway object argument does need to exist in the cluster, thu, the function
+// may be used with Not after the gateway has been deleted, to verify that
+// the networkpolicy has been deleted too.
 func gatewayNetworkPoliciesExist(t *testing.T, gateway *v1alpha2.Gateway) func() bool {
 	return func() bool {
 		networkpolicies, err := gatewayutils.ListNetworkPoliciesForGateway(ctx, mgrClient, gateway)
@@ -202,6 +211,35 @@ func gatewayNetworkPoliciesExist(t *testing.T, gateway *v1alpha2.Gateway) func()
 			return false
 		}
 		return len(networkpolicies) > 0
+	}
+}
+
+func getShouldReturnResponse(t *testing.T, url string, expectedResponseBody string) func() bool {
+	return func() bool {
+		resp, err := httpc.Get(url)
+		if err != nil {
+			return false
+		}
+
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		return strings.Contains(string(body), expectedResponseBody)
+	}
+}
+
+func gatewayIpAddressExist(t *testing.T, gatewayNSN types.NamespacedName) func() bool {
+	gateways := gatewayClient.GatewayV1alpha2().Gateways(gatewayNSN.Namespace)
+	return func() bool {
+		gateway, err := gateways.Get(ctx, gatewayNSN.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+
+		if len(gateway.Status.Addresses) > 0 && *gateway.Status.Addresses[0].Type == gatewayv1alpha2.IPAddressType {
+			return true
+		}
+		return false
 	}
 }
 

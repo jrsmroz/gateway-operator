@@ -4,8 +4,6 @@
 package integration
 
 import (
-	"io"
-	"strings"
 	"testing"
 	"time"
 
@@ -78,16 +76,9 @@ func TestGatewayEssentials(t *testing.T) {
 	require.Eventually(t, gatewayIsReady(t, gatewayNSN), gatewayReadyTimeLimit, time.Second)
 
 	t.Log("verifying Gateway gets an IP address")
-	var gatewayIP string
-	require.Eventually(t, func() bool {
-		gateway, err = gatewayClient.GatewayV1alpha2().Gateways(namespace.Name).Get(ctx, gateway.Name, metav1.GetOptions{})
-		require.NoError(t, err)
-		if len(gateway.Status.Addresses) > 0 && *gateway.Status.Addresses[0].Type == gatewayv1alpha2.IPAddressType {
-			gatewayIP = gateway.Status.Addresses[0].Value
-			return true
-		}
-		return false
-	}, subresourceReadinessWait, time.Second)
+	require.Eventually(t, gatewayIpAddressExist(t, gatewayNSN), subresourceReadinessWait, time.Second)
+	gateway = mustGetGateway(t, gatewayNSN)
+	gatewayIPAddress := gateway.Status.Addresses[0].Value
 
 	t.Log("verifying that the DataPlane becomes provisioned")
 	require.Eventually(t, gatewayDataPlanesIsProvisioned(t, gateway), subresourceReadinessWait, time.Second)
@@ -101,9 +92,8 @@ func TestGatewayEssentials(t *testing.T) {
 	require.Eventually(t, gatewayNetworkPoliciesExist(t, gateway), subresourceReadinessWait, time.Second)
 
 	t.Log("verifying connectivity to the Gateway")
-	require.Eventually(t, func() bool {
-		return newFunction(t, "http://"+gatewayIP, defaultKongResponseBody)
-	}, subresourceReadinessWait, time.Second)
+
+	require.Eventually(t, getShouldReturnResponse(t, "http://"+gatewayIPAddress, defaultKongResponseBody), subresourceReadinessWait, time.Second)
 
 	t.Log("deleting Gateway resource")
 	require.NoError(t, gatewayClient.GatewayV1alpha2().Gateways(namespace.Name).Delete(ctx, gateway.Name, metav1.DeleteOptions{}))
@@ -122,18 +112,4 @@ func TestGatewayEssentials(t *testing.T) {
 
 	t.Log("verifying networkpolicies are deleted")
 	require.Eventually(t, Not(gatewayNetworkPoliciesExist(t, gateway)), time.Minute, time.Second)
-}
-
-func newFunction(t *testing.T, url string, expectedResponseBody string) bool {
-	resp, err := httpc.Get(url)
-	if err != nil {
-		return false
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	return strings.Contains(string(body), expectedResponseBody)
 }
