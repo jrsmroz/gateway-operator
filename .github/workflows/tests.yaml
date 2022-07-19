@@ -2,17 +2,21 @@ name: tests
 
 on:
   pull_request:
-    branches:
-      - '*'
-    paths-ignore:
-      - '**/**.md'
+    branches-ignore:
+      - '**'
+    # branches:
+    #   - '*'
+    # paths-ignore:
+    #   - '**/**.md'
   push:
-    branches:
-      - 'main'
-    tags:
-      - '*'
-    paths-ignore:
-      - '**/**.md'
+    branches-ignore:
+      - '**'
+    # branches:
+    #   - 'main'
+    # tags:
+    #   - '*'
+    # paths-ignore:
+    #   - '**/**.md'
   workflow_dispatch: {}
 
 jobs:
