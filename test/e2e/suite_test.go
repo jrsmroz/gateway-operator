@@ -133,5 +133,6 @@ func waitForOperatorDeployment() error {
 			}
 		}
 	}
+
 	return nil
 }
