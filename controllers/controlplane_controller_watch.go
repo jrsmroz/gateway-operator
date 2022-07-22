@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -12,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1alpha1 "github.com/kong/gateway-operator/apis/v1alpha1"
+	operatorerrors "github.com/kong/gateway-operator/internal/errors"
 	k8sutils "github.com/kong/gateway-operator/internal/utils/kubernetes"
 )
 
@@ -23,7 +23,7 @@ func (r *ControlPlaneReconciler) clusterRoleHasControlplaneOwner(obj client.Obje
 	clusterRole, ok := obj.(*rbacv1.ClusterRole)
 	if !ok {
 		log.FromContext(context.Background()).Error(
-			fmt.Errorf("unexpected object type provided"),
+			operatorerrors.ErrUnexpectedObject,
 			"failed to run predicate function",
 			"expected", "ClusterRole", "found", reflect.TypeOf(obj),
 		)
@@ -37,7 +37,7 @@ func (r *ControlPlaneReconciler) clusterRoleBindingHasControlplaneOwner(obj clie
 	clusterRoleBinding, ok := obj.(*rbacv1.ClusterRoleBinding)
 	if !ok {
 		log.FromContext(context.Background()).Error(
-			fmt.Errorf("unexpected object type provided"),
+			operatorerrors.ErrUnexpectedObject,
 			"failed to run predicate function",
 			"expected", "ClusterRoleBinding", "found", reflect.TypeOf(obj),
 		)
@@ -75,7 +75,7 @@ func (r *ControlPlaneReconciler) getControlplaneForClusterRole(obj client.Object
 	clusterRole, ok := obj.(*rbacv1.ClusterRole)
 	if !ok {
 		log.FromContext(context.Background()).Error(
-			fmt.Errorf("unexpected object type provided"),
+			operatorerrors.ErrUnexpectedObject,
 			"failed to run map funcs",
 			"expected", "ClusterRole", "found", reflect.TypeOf(obj),
 		)
@@ -89,7 +89,7 @@ func (r *ControlPlaneReconciler) getControlplaneForClusterRoleBinding(obj client
 	clusterRoleBinding, ok := obj.(*rbacv1.ClusterRoleBinding)
 	if !ok {
 		log.FromContext(context.Background()).Error(
-			fmt.Errorf("unexpected object type provided"),
+			operatorerrors.ErrUnexpectedObject,
 			"failed to run map funcs",
 			"expected", "ClusterRoleBinding", "found", reflect.TypeOf(obj),
 		)

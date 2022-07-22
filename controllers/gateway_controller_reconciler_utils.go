@@ -39,6 +39,8 @@ func (r *GatewayReconciler) ensureDataPlaneForGateway(ctx context.Context,
 
 	count := len(dataplanes)
 	if count > 1 {
+		// if there is more than one Dataplane owned by the same Gateway,
+		// delete all of them and recreate only one as follows
 		if err := r.Client.DeleteAllOf(ctx, &operatorv1alpha1.DataPlane{},
 			client.InNamespace(gateway.Namespace),
 			client.MatchingLabels{consts.GatewayOperatorControlledLabel: consts.GatewayManagedLabelValue},
@@ -85,6 +87,8 @@ func (r *GatewayReconciler) ensureControlPlaneForGateway(
 
 	count := len(controlplanes)
 	if count > 1 {
+		// if there is more than one ControlPlane owned by the same Gateway,
+		// delete all of them and recreate only one as follows
 		if err := r.Client.DeleteAllOf(ctx, &operatorv1alpha1.DataPlane{},
 			client.InNamespace(gateway.Namespace),
 			client.MatchingLabels{consts.GatewayOperatorControlledLabel: consts.GatewayManagedLabelValue},

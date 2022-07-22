@@ -133,6 +133,8 @@ func (r *DataPlaneReconciler) ensureDeploymentForDataPlane(
 
 	count := len(deployments)
 	if count > 1 {
+		// if there is more than one Deployment owned by the same DataPlane,
+		// delete all of them and recreate only one as follows below
 		if err := r.Client.DeleteAllOf(ctx, &appsv1.Deployment{},
 			client.InNamespace(dataplane.Namespace),
 			client.MatchingLabels{consts.GatewayOperatorControlledLabel: consts.DataPlaneManagedLabelValue},
@@ -175,6 +177,8 @@ func (r *DataPlaneReconciler) ensureServiceForDataPlane(
 
 	count := len(services)
 	if count > 1 {
+		// if there is more than one Service owned by the same DataPlane,
+		// delete all of them and recreate only one as follows below
 		if err := r.Client.DeleteAllOf(ctx, &corev1.Service{},
 			client.InNamespace(dataplane.Namespace),
 			client.MatchingLabels{consts.GatewayOperatorControlledLabel: consts.DataPlaneManagedLabelValue},

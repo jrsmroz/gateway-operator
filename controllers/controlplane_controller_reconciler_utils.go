@@ -166,6 +166,8 @@ func (r *ControlPlaneReconciler) ensureDeploymentForControlPlane(
 
 	count := len(deployments)
 	if count > 1 {
+		// if there is more than one Deployment owned by the same ControlPlane,
+		// delete all of them and recreate only one as follows below
 		if err := r.Client.DeleteAllOf(ctx, &appsv1.Deployment{},
 			client.InNamespace(controlplane.Namespace),
 			client.MatchingLabels{consts.GatewayOperatorControlledLabel: consts.ControlPlaneManagedLabelValue},
@@ -224,6 +226,8 @@ func (r *ControlPlaneReconciler) ensureServiceAccountForControlPlane(
 
 	count := len(serviceAccounts)
 	if count > 1 {
+		// if there is more than one ServiceAccount owned by the same ControlPlane,
+		// delete all of them and recreate only one as follows below
 		if err := r.Client.DeleteAllOf(ctx, &corev1.ServiceAccount{},
 			client.InNamespace(controlplane.Namespace),
 			client.MatchingLabels{consts.GatewayOperatorControlledLabel: consts.ControlPlaneManagedLabelValue},
@@ -259,6 +263,8 @@ func (r *ControlPlaneReconciler) ensureClusterRoleForControlPlane(
 
 	count := len(clusterRoles)
 	if count > 1 {
+		// if there is more than one ClusterRole owned by the same ControlPlane,
+		// delete all of them and recreate only one as follows below
 		if err := r.Client.DeleteAllOf(ctx, &rbacv1.ClusterRole{},
 			client.InNamespace(controlplane.Namespace),
 			client.MatchingLabels{consts.GatewayOperatorControlledLabel: consts.ControlPlaneManagedLabelValue},
@@ -299,6 +305,8 @@ func (r *ControlPlaneReconciler) ensureClusterRoleBindingForControlPlane(
 
 	count := len(clusterRoleBindings)
 	if count > 1 {
+		// if there is more than one ClusterRoleBinding owned by the same ControlPlane,
+		// delete all of them and recreate only one as follows below
 		if err := r.Client.DeleteAllOf(ctx, &rbacv1.ClusterRoleBinding{},
 			client.InNamespace(controlplane.Namespace),
 			client.MatchingLabels{consts.GatewayOperatorControlledLabel: consts.ControlPlaneManagedLabelValue},
