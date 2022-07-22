@@ -7,6 +7,7 @@ SHELL = /usr/bin/env bash -o pipefail
 
 IMG ?= ghcr.io/kong/gateway-operator
 TAG ?= latest
+RHTAG ?= latest-redhat
 
 # ------------------------------------------------------------------------------
 # Configuration - OperatorHub
@@ -39,46 +40,44 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-golangci-lint: ## Download golangci-lint locally if necessary.
-	$(call go-get-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@v1.44.2)
+PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
-.PHONY: controller-gen
-controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0)
+.PHONY: _download_tool
+_download_tool:
+	(cd third_party && GOBIN=$(PROJECT_DIR)/bin go generate -tags=third_party ./$(TOOL).go )
 
-KUSTOMIZE = $(shell pwd)/bin/kustomize
-.PHONY: kustomize
-kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.5)
+.PHONY: tools
+tools: envtest kic-role-generator controller-gen kustomize client-gen golangci-lint
 
-ENVTEST = $(shell pwd)/bin/setup-envtest
+ENVTEST = $(PROJECT_DIR)/bin/setup-envtest
 .PHONY: envtest
 envtest: ## Download envtest-setup locally if necessary.
-	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	@$(MAKE) _download_tool TOOL=setup-envtest
 
-CLIENT_GEN = $(shell pwd)/bin/client-gen
-client-gen: ## Download client-gen locally if necessary.
-	$(call go-get-tool,$(CLIENT_GEN),k8s.io/code-generator/cmd/client-gen@v0.24.2)
-
-KIC_ROLE_GENERATOR = $(shell pwd)/bin/kic-role-generator
+KIC_ROLE_GENERATOR = $(PROJECT_DIR)/bin/kic-role-generator
+.PHONY: kic-role-generator
 kic-role-generator:
-	go build -o $(KIC_ROLE_GENERATOR) ./hack/generators/kic-role-generator 
+	go build -o $(KIC_ROLE_GENERATOR) ./hack/generators/kic-role-generator
 
-# go-get-tool will 'go get' any package $2 and install it to $1.
-PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
-define go-get-tool
-@[ -f $(1) ] || { \
-set -e ;\
-TMP_DIR=$$(mktemp -d) ;\
-cd $$TMP_DIR ;\
-go mod init tmp ;\
-echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go install $(2) ;\
-rm -rf $$TMP_DIR ;\
-}
-endef
+CONTROLLER_GEN = $(PROJECT_DIR)/bin/controller-gen
+.PHONY: controller-gen
+controller-gen: ## Download controller-gen locally if necessary.
+	@$(MAKE) _download_tool TOOL=controller-gen
+
+KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
+.PHONY: kustomize
+kustomize: ## Download kustomize locally if necessary.
+	@$(MAKE) _download_tool TOOL=kustomize
+
+CLIENT_GEN = $(PROJECT_DIR)/bin/client-gen
+.PHONY: client-gen
+client-gen: ## Download client-gen locally if necessary.
+	@$(MAKE) _download_tool TOOL=client-gen
+
+GOLANGCI_LINT = $(PROJECT_DIR)/bin/golangci-lint
+.PHONY: golangci-lint
+golangci-lint: ## Download golangci-lint locally if necessary.
+	@$(MAKE) _download_tool TOOL=golangci-lint
 
 # ------------------------------------------------------------------------------
 # Build
@@ -165,11 +164,15 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 
 .PHONY: docker.build
 docker.build:
-	docker build -t ${IMG}:${TAG} .
+	docker build -t ${IMG}:${TAG} --target distroless --build-arg TAG=${TAG} . 
 
 .PHONY: docker.push
 docker.push:
 	docker push ${IMG}:${TAG}
+
+.PHONY: docker.build.redhat
+docker.build.redhat:
+	docker build -t ${IMG}:${RHTAG} --target redhat --build-arg TAG=${RHTAG} . 
 
 # ------------------------------------------------------------------------------
 # Build - OperatorHub Bundles
