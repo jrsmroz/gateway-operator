@@ -70,13 +70,13 @@ func TestGatewayEssentials(t *testing.T) {
 	cleaner.Add(gateway)
 
 	t.Log("verifying Gateway gets marked as Scheduled")
-	require.Eventually(t, gatewayIsScheduled(t, gatewayNSN), gatewaySchedulingTimeLimit, time.Second)
+	require.Eventually(t, gatewayIsScheduled(t, ctx, gatewayNSN), gatewaySchedulingTimeLimit, time.Second)
 
 	t.Log("verifying Gateway gets marked as Ready")
-	require.Eventually(t, gatewayIsReady(t, gatewayNSN), gatewayReadyTimeLimit, time.Second)
+	require.Eventually(t, gatewayIsReady(t, ctx, gatewayNSN), gatewayReadyTimeLimit, time.Second)
 
 	t.Log("verifying Gateway gets an IP address")
-	require.Eventually(t, gatewayIpAddressExist(t, gatewayNSN), subresourceReadinessWait, time.Second)
+	require.Eventually(t, gatewayIpAddressExist(t, ctx, gatewayNSN), subresourceReadinessWait, time.Second)
 	gateway = mustGetGateway(t, gatewayNSN)
 	gatewayIPAddress := gateway.Status.Addresses[0].Value
 
@@ -89,11 +89,11 @@ func TestGatewayEssentials(t *testing.T) {
 	controlplane := mustListControlPlanesForGateway(t, gateway)[0]
 
 	t.Log("verifying networkpolicies are created")
-	require.Eventually(t, gatewayNetworkPoliciesExist(t, gateway), subresourceReadinessWait, time.Second)
+	require.Eventually(t, gatewayNetworkPoliciesExist(t, ctx, gateway), subresourceReadinessWait, time.Second)
 
 	t.Log("verifying connectivity to the Gateway")
 
-	require.Eventually(t, getShouldReturnResponse(t, "http://"+gatewayIPAddress, defaultKongResponseBody), subresourceReadinessWait, time.Second)
+	require.Eventually(t, getResponseBodyContains(t, ctx, "http://"+gatewayIPAddress, defaultKongResponseBody), subresourceReadinessWait, time.Second)
 
 	t.Log("deleting Gateway resource")
 	require.NoError(t, gatewayClient.GatewayV1alpha2().Gateways(namespace.Name).Delete(ctx, gateway.Name, metav1.DeleteOptions{}))
@@ -111,5 +111,5 @@ func TestGatewayEssentials(t *testing.T) {
 	}, time.Minute, time.Second)
 
 	t.Log("verifying networkpolicies are deleted")
-	require.Eventually(t, Not(gatewayNetworkPoliciesExist(t, gateway)), time.Minute, time.Second)
+	require.Eventually(t, Not(gatewayNetworkPoliciesExist(t, ctx, gateway)), time.Minute, time.Second)
 }
